@@ -13,7 +13,7 @@ st.set_page_config(page_title="NBA Player Performance Prediction", layout="wide"
 @st.cache_data
 def load_data():
     # If CSV, convert to Parquet first (done once)
-    df = pd.read_parquet("nba_data.parquet")  # Loading Parquet file instead of CSV
+    df = pd.read_csv("nba_data.csv")  # Keeping CSV file for data path
     df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
     df = df.sort_values(by=['PLAYER_NAME', 'GAME_DATE'])
     
