@@ -9,12 +9,18 @@ from streamlit_extras.metric_cards import style_metric_cards
 # Set Streamlit page configuration
 st.set_page_config(page_title="NBA Player Performance Prediction", layout="wide")
 
-# Cache dataset loading
+# Cache dataset loading (use Parquet for faster loading)
 @st.cache_data
 def load_data():
-    df = pd.read_csv("nba_active_players_game_logs_2021_24.csv")
+    # If CSV, convert to Parquet first (done once)
+    df = pd.read_parquet("nba_data.parquet")  # Loading Parquet file instead of CSV
     df['GAME_DATE'] = pd.to_datetime(df['GAME_DATE'])
     df = df.sort_values(by=['PLAYER_NAME', 'GAME_DATE'])
+    
+    # Convert categorical columns to 'category' dtype to save memory
+    for col in ['PLAYER_NAME', 'TEAM', 'MATCHUP']:
+        df[col] = df[col].astype('category')
+        
     return df
 
 df = load_data()
@@ -48,10 +54,10 @@ def encode_columns(df):
 
 df, label_encoders = encode_columns(df)
 
-# Compute rolling averages
+# Optimized rolling averages using vectorized operations
 ROLLING_WINDOW = 5
 for col in ['PTS', 'REB', 'AST']:
-    df[f'{col}_L5G'] = df.groupby('PLAYER_NAME')[col].transform(lambda x: x.rolling(ROLLING_WINDOW, min_periods=1).mean())
+    df[f'{col}_L5G'] = df.groupby('PLAYER_NAME')[col].apply(lambda x: x.rolling(ROLLING_WINDOW, min_periods=1).mean())
 
 # Define features and targets
 FEATURES = ["MATCHUP_encoded", "TEAM_encoded", "PLAYER_NAME_encoded", "FGM", "FGA", "FTM", "FTA", "OREB", "DREB", "TOV", "PTS_L5G", "REB_L5G", "AST_L5G", "DEF_RATING"]
@@ -61,7 +67,7 @@ TARGETS = ["PTS", "REB", "AST", "3PM", "BLK", "STL"]
 X = df[FEATURES].dropna()
 y = df.loc[X.index, TARGETS]
 
-# Train model (done once and cached)
+# Train model (cached)
 @st.cache_resource
 def train_model(X, y):
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
